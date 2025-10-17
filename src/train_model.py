@@ -38,14 +38,26 @@ def train_and_save_model(input_path):
     # Dividir en entrenamiento y prueba
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    # === Entrenar modelo (puedes cambiar por XGBoost o Regresión Logística) ===
-    model = xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
+    # === Entrenar modelo XGBoost más ligero ===
+    model = xgb.XGBClassifier(
+        use_label_encoder=False,
+        eval_metric='logloss',
+        random_state=42,
+        # Parámetros para hacerlo más ligero y rápido
+        n_estimators=50,        # Reducido de 100
+        max_depth=3,            # Limitar profundidad
+        learning_rate=0.1,      # Tasa de aprendizaje
+        subsample=0.8,
+        colsample_bytree=0.8,
+        # Opcional: usar árboles gpu_hist si Render tuviera GPU (no es el caso)
+        tree_method='hist'      # Método de entrenamiento más eficiente
+    )
     model.fit(X_train, y_train)
 
     # === Predecir y evaluar ===
     y_pred = model.predict(X_test)
 
-    print("\nMétricas del modelo XGBoost:")
+    print("\nMétricas del modelo XGBoost (ligero):")
     print("Accuracy:", accuracy_score(y_test, y_pred))
     print("Precision:", precision_score(y_test, y_pred))
     print("Recall:", recall_score(y_test, y_pred))
@@ -64,13 +76,13 @@ def train_and_save_model(input_path):
     plt.title("Matriz de Confusión")
     plt.ylabel("Real")
     plt.xlabel("Predicción")
-    plt.savefig("confusion_matrix.png")  # Guardar la imagen
+    plt.savefig("confusion_matrix_ligero.png")  # Guardar la imagen
     # plt.show()  # Comentar o eliminar esta línea
-    print("Matriz de confusión guardada como confusion_matrix.png")
+    print("Matriz de confusión guardada como confusion_matrix_ligero.png")
 
     # === Guardar modelo ===
-    joblib.dump(model, "modelo_phishing_detector.pkl")
-    print("\nModelo guardado como modelo_phishing_detector.pkl")
+    joblib.dump(model, "modelo_phishing_detector_ligero.pkl")
+    print("\nModelo ligero guardado como modelo_phishing_detector_ligero.pkl")
 
 if __name__ == "__main__":
     train_and_save_model("./data/processed_data.csv")

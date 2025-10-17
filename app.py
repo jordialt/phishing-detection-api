@@ -3,11 +3,56 @@ import joblib
 import pandas as pd
 from urllib.parse import urlparse
 import re
+import os
 
 app = Flask(__name__)
 
-# Cargar el modelo entrenado
-model = joblib.load("modelo_phishing_detector.pkl")
+model = None
+# Cambia el nombre del archivo del modelo a la versión ligera
+model_path = "modelo_phishing_detector_ligero.pkl"
+
+# Intentar cargar el modelo al iniciar la aplicación
+try:
+    if os.path.exists(model_path):
+        model = joblib.load(model_path)
+        print(f"Modelo ligero '{model_path}' cargado exitosamente.")
+    else:
+        print(f"ERROR: Archivo del modelo ligero '{model_path}' no encontrado en el entorno de ejecución.")
+except Exception as e:
+    print(f"ERROR: No se pudo cargar el modelo ligero '{model_path}'. Detalles: {e}")
+
+@app.route('/predict', methods=['POST'])
+def predict():
+    global model
+    if model is None:
+        return jsonify({'error': 'El modelo no está disponible.'}), 500
+
+    try:
+        data = request.get_json()
+        if not data or 'url' not in data:
+            return jsonify({'error': 'Falta el campo "url" en la solicitud JSON.'}), 400
+
+        url = data['url']
+
+        # Extraer características
+        features = extract_features(url)
+        df = pd.DataFrame([features])
+
+        # Hacer la predicción
+        prediction = model.predict(df)[0]
+        result = 'phishing' if prediction == 1 else 'legitimate'
+
+        return jsonify({'url': url, 'prediction': result})
+
+    except KeyError:
+        return jsonify({'error': 'Falta el campo "url" en la solicitud JSON.'}), 400
+    except Exception as e:
+        print(f"ERROR en /predict: {e}") # Esto se imprimirá en los logs de Render
+        return jsonify({'error': f'Error interno al procesar la predicción: {str(e)}'}), 500
+
+@app.route('/', methods=['GET'])
+def home():
+    return jsonify({'message': 'API de detección de phishing está corriendo.'})
 
 def extract_features(url):
     parsed = urlparse(url)
@@ -35,31 +80,7 @@ def extract_features(url):
 
     return features
 
-@app.route('/predict', methods=['POST'])
-def predict():
-    try:
-        data = request.get_json()
-        url = data['url']
-
-        # Extraer características
-        features = extract_features(url)
-        df = pd.DataFrame([features])
-
-        # Hacer la predicción
-        prediction = model.predict(df)[0]
-        result = 'phishing' if prediction == 1 else 'legitimate'
-
-        return jsonify({'url': url, 'prediction': result})
-
-    except KeyError:
-        return jsonify({'error': 'Falta el campo "url" en la solicitud JSON.'}), 400
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# Ruta de ejemplo para verificar que la API esté corriendo
-@app.route('/', methods=['GET'])
-def home():
-    return jsonify({'message': 'API de detección de phishing está corriendo.'})
-
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # En Render, Gunicorn se encarga de ejecutar la app, no esta parte
+    # pero es útil para pruebas locales
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
