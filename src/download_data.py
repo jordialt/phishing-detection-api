@@ -19,15 +19,46 @@ def download_from_kaggle(dataset_name):
     api = KaggleApi()
     api.authenticate()
     # Descargar el dataset completo como ZIP
-    api.dataset_download_files(dataset_name, path="./data/")
+    api.dataset_download_files(dataset_name, path="./data/", unzip=False)
 
-    # Descomprimir el archivo ZIP
-    zip_path = "./data/web-page-phishing-detection-dataset.zip"
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall("./data/")
+    # Buscar el archivo ZIP descargado (puede variar el nombre)
+    import os
 
-    # Leer el archivo CSV correcto
-    df = pd.read_csv("./data/dataset_phishing.csv")
+    data_dir = "./data"
+    zip_files = [f for f in os.listdir(data_dir) if f.endswith('.zip')]
+    if not zip_files:
+        print(f"No se encontró archivo .zip en {data_dir} después de la descarga")
+        return pd.DataFrame()
+
+    zip_path = os.path.join(data_dir, zip_files[0])
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(data_dir)
+    except zipfile.BadZipFile:
+        print(f"El archivo {zip_path} no es un ZIP válido")
+        return pd.DataFrame()
+
+    # Intentar encontrar un CSV dentro de la carpeta data
+    csv_files = [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith('.csv')]
+    if not csv_files:
+        # Revisar subdirectorios
+        for root, _, files in os.walk(data_dir):
+            for f in files:
+                if f.endswith('.csv'):
+                    csv_files.append(os.path.join(root, f))
+
+    if not csv_files:
+        print("No se encontró ningún archivo CSV tras la extracción del ZIP")
+        return pd.DataFrame()
+
+    # Leer el primer CSV encontrado (asumimos que contiene las URLs)
+    csv_path = csv_files[0]
+    try:
+        df = pd.read_csv(csv_path)
+    except Exception as e:
+        print(f"Error leyendo {csv_path}: {e}")
+        return pd.DataFrame()
+
     return df
 
 def get_legitimate_urls():
@@ -162,7 +193,8 @@ def combine_datasets():
     df_openphish = download_from_openphish()
 
     # Descargar de Kaggle
-    dataset_name = "shashwatwork/web-page-phishing-detection-dataset"
+    # Nuevo dataset indicado por el usuario
+    dataset_name = "taruntiwarihp/phishing-site-urls"
     df_kaggle = download_from_kaggle(dataset_name)
 
     # Combinar datasets
